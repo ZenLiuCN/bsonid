@@ -1,8 +1,18 @@
 package cn.zenliu.bsonid
 
 import com.fasterxml.jackson.annotation.JsonCreator
-import javafx.util.converter.BigIntegerStringConverter
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.core.JsonParser
+import com.fasterxml.jackson.databind.DeserializationContext
+import com.fasterxml.jackson.databind.JsonDeserializer
+import com.fasterxml.jackson.databind.JsonSerializer
+import com.fasterxml.jackson.databind.SerializerProvider
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize
+import com.fasterxml.jackson.databind.annotation.JsonSerialize
+import com.google.gson.*
+import com.google.gson.annotations.JsonAdapter
 import java.io.Serializable
+import java.lang.reflect.Type
 import java.math.BigInteger
 import java.net.NetworkInterface
 import java.nio.BufferUnderflowException
@@ -26,6 +36,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * @property localDateTime LocalDateTime
  * @property instant Instant
  */
+@JsonAdapter(BsonId.Companion.BsonIdJsonAdpter::class)
+@JsonSerialize(using = BsonId.Companion.BsonIdJsonSerializer::class)
+@JsonDeserialize(using = BsonId.Companion.BsonIdJsonDeserializer::class)
 class BsonId : Comparable<BsonId>, Serializable {
     val timestamp: Int
     val machineIdentifier: Int
@@ -214,6 +227,7 @@ class BsonId : Comparable<BsonId>, Serializable {
         return timestamp == objectId.timestamp
 
     }
+
     override fun hashCode(): Int {
         var result = timestamp
         result = 31 * result + machineIdentifier
@@ -221,50 +235,35 @@ class BsonId : Comparable<BsonId>, Serializable {
         result = 31 * result + counter
         return result
     }
+
     override fun compareTo(other: BsonId): Int {
         val byteArray = toByteArray()
         val otherByteArray = other.toByteArray()
         return (0..11).firstOrNull { byteArray[it] != otherByteArray[it] }?.let { if (byteArray[it].toInt() and 0xff < otherByteArray[it].toInt() and 0xff) -1 else 1 }
             ?: 0
     }
+
     override fun toString(): String = toHex()
     fun toShortString() = compressObjectId(toHex())
     fun toShort() = ShortBsonId(toShortString())
+
     companion object {
-        private const val code="0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
-        private val converter= BigIntegerStringConverter()
-        private fun shortIdFromBigInt(bint:BigInteger)= bint.toString(10).let { if(it.length%2==1) "0$it" else it }.chunked(2).map { code[it.toInt()] }.joinToString("")
-        private fun shortIdToBigInt(id:String)= id.map { code.indexOf(it) }.joinToString(""){"%02d".format(it)}.toBigIntegerOrNull()
+        internal const val code = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_"
+
         //<editor-fold desc="ShortOBjectID">
-        class ShortBsonId(private val hexString: String){
-            private val id:BsonId
-            init {
-               id= fromShort(hexString)!!
-            }
-            constructor(bint:BigInteger):this(shortIdFromBigInt(bint))
-            val timestamp: Int get()= id.timestamp
-            val machineIdentifier: Int get()=  id.machineIdentifier
-            val processIdentifier: Short get()= id.processIdentifier
-            val counter: Int get() = id.counter
-            val date: Date get() = id.date
-            val localDateTime: LocalDateTime get() =id.localDateTime
-            val instant: Instant get() = id.instant
-            val bsonId get() = id
-            val hex=hexString
-            val bigInt get() = shortIdToBigInt(hexString)
-            override fun toString(): String=hexString
-        }
         @JvmStatic
         fun isVaildShortId(id: String?) = id != null &&
                 id.length == 16 &&
-                id.find { it !in code.toCharArray()} == null
+                id.find { it !in code.toCharArray() } == null
 
         @JvmStatic
         fun getShort() = BsonId.get().toShort()
+
         @JvmStatic
-        fun fromShort(shortId: String) = if(isVaildShortId(shortId)){
+        fun fromShort(shortId: String) = if (isVaildShortId(shortId)) {
             BsonId(unCompressObjectId(shortId))
-        }else null
+        } else null
+
         @JvmStatic
         private fun unCompressObjectId(shortId: String?): String {
             if (shortId == null || shortId.length != 16) {
@@ -285,7 +284,7 @@ class BsonId : Comparable<BsonId>, Serializable {
         }
 
         @JvmStatic
-      private  fun compressObjectId(objectId: String?): String {
+        private fun compressObjectId(objectId: String?): String {
             if (objectId == null || objectId.length != 24) {
                 throw IllegalArgumentException()
             }
@@ -306,30 +305,20 @@ class BsonId : Comparable<BsonId>, Serializable {
         @JvmStatic
         private fun int2Char(i: Int): Char =
             when {
-              /*  i in 0..9 -> ('0'.toInt() + i).toChar()
-                i in 10..35 -> ('a'.toInt() + i - 10).toChar()
-                i in 36..61 -> ('A'.toInt() + i - 36).toChar()
-                i == 62 -> '-'
-                i == 63 -> '_'*/
-                i>=0 && i<=63->code[i]
+                /*  i in 0..9 -> ('0'.toInt() + i).toChar()
+                  i in 10..35 -> ('a'.toInt() + i - 10).toChar()
+                  i in 36..61 -> ('A'.toInt() + i - 36).toChar()
+                  i == 62 -> '-'
+                  i == 63 -> '_'*/
+                i >= 0 && i <= 63 -> code[i]
                 else -> throw IllegalArgumentException()
             }
 
         @JvmStatic
-        private fun char2Int(c: Char): Int =code.indexOf(c).let {
-            if(it==-1) throw IllegalArgumentException()
+        private fun char2Int(c: Char): Int = code.indexOf(c).let {
+            if (it == -1) throw IllegalArgumentException()
             it
         }
-           /* when {
-               *//* c in '0'..'9' -> c - '0'
-                c in 'a'..'z' -> 10 + c.toInt() - 'a'.toInt()
-                c in 'A'..'Z' -> 36 + c.toInt() - 'A'.toInt()
-                c == '-' -> 62
-                c == '_' -> 63*//*
-                c in
-                else ->
-            }*/
-        //</editor-fold>
 
         //<editor-fold desc="RawObjectId">
 
@@ -356,7 +345,7 @@ class BsonId : Comparable<BsonId>, Serializable {
          * @return whether the string could be an object id
          * @throws IllegalArgumentException if hexString is null
          */
-        fun isValidObjectId(hexString: String?): Boolean {
+        fun validate(hexString: String?): Boolean {
             if (hexString == null) {
                 throw IllegalArgumentException()
             }
@@ -438,8 +427,10 @@ class BsonId : Comparable<BsonId>, Serializable {
         private var PROCESS_IDENTIFIER: Short
         private val NEXT_COUNTER = AtomicInteger(SecureRandom().nextInt())
 
-        @JvmStatic private val HEX_CHARS =
+        @JvmStatic
+        private val HEX_CHARS =
             charArrayOf('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f')
+
         init {
             try {
                 generatedMachineIdentifier = createMachineIdentifier()
@@ -449,7 +440,9 @@ class BsonId : Comparable<BsonId>, Serializable {
             }
 
         }
-        @JvmStatic private fun legacyToBytes(timestamp: Int, machineAndProcessIdentifier: Int, counter: Int): ByteArray {
+
+        @JvmStatic
+        private fun legacyToBytes(timestamp: Int, machineAndProcessIdentifier: Int, counter: Int): ByteArray {
             val bytes = ByteArray(12)
             bytes[0] = int3(timestamp)
             bytes[1] = int2(timestamp)
@@ -467,7 +460,8 @@ class BsonId : Comparable<BsonId>, Serializable {
         }
 
 
-        @JvmStatic private fun createMachineIdentifier(): Int {
+        @JvmStatic
+        private fun createMachineIdentifier(): Int {
             // build a 2-byte machine piece based on NICs info
             var machinePiece: Int
             try {
@@ -520,9 +514,10 @@ class BsonId : Comparable<BsonId>, Serializable {
 
             return processId
         }
+
         @JvmStatic
         private fun parseHexString(s: String): ByteArray {
-            if (!isValidObjectId(s)) {
+            if (!validate(s)) {
                 throw IllegalArgumentException("invalid hexadecimal representation of an BsonId: [$s]")
             }
 
@@ -533,23 +528,156 @@ class BsonId : Comparable<BsonId>, Serializable {
             return b
         }
 
-        @JvmStatic  private fun dateToTimestampSeconds(time: Date): Int = (time.time / 1000).toInt()
+        @JvmStatic
+        private fun dateToTimestampSeconds(time: Date): Int = (time.time / 1000).toInt()
 
         // Big-Endian helpers, in this class because all other BSON numbers are little-endian
-        @JvmStatic private fun makeInt(b3: Byte, b2: Byte, b1: Byte, b0: Byte): Int =
+        @JvmStatic
+        private fun makeInt(b3: Byte, b2: Byte, b1: Byte, b0: Byte): Int =
             b3.toInt() shl 24 or (b2.toInt() and 0xff shl 16) or (b1.toInt() and 0xff shl 8) or (b0.toInt() and 0xff)
 
-        @JvmStatic private fun int3(x: Int): Byte = (x shr 24).toByte()
+        @JvmStatic
+        private fun int3(x: Int): Byte = (x shr 24).toByte()
 
-        @JvmStatic private fun int2(x: Int): Byte = (x shr 16).toByte()
+        @JvmStatic
+        private fun int2(x: Int): Byte = (x shr 16).toByte()
 
-        @JvmStatic private fun int1(x: Int): Byte = (x shr 8).toByte()
+        @JvmStatic
+        private fun int1(x: Int): Byte = (x shr 8).toByte()
 
-        @JvmStatic private fun int0(x: Int): Byte = x.toByte()
+        @JvmStatic
+        private fun int0(x: Int): Byte = x.toByte()
 
-        @JvmStatic private fun short1(x: Short): Byte = (x.toInt() shr 8).toByte()
+        @JvmStatic
+        private fun short1(x: Short): Byte = (x.toInt() shr 8).toByte()
 
-        @JvmStatic private fun short0(x: Short): Byte = x.toByte()
+        @JvmStatic
+        private fun short0(x: Short): Byte = x.toByte()
         //</editor-fold>
+
+        class BsonIdJsonSerializer : JsonSerializer<BsonId>() {
+            override fun serialize(value: BsonId?, gen: JsonGenerator?, serializers: SerializerProvider?) {
+                gen?.writeRawValue(value?.let {
+                    "\"${value.toHex()}\""
+                }
+                    ?: "null")
+            }
+        }
+
+        class BsonIdJsonDeserializer : JsonDeserializer<BsonId>() {
+            override fun deserialize(p: JsonParser?, ctxt: DeserializationContext?): BsonId? = when {
+                p == null || p.text.isNullOrEmpty() || p.text == "null" || !BsonId.validate(
+                    p.text.replace(
+                        "\"",
+                        ""
+                    )
+                ) -> null
+                else -> BsonId(p.text.replace("\"", ""))
+            }
+
+        }
+        class BsonIdJsonAdpter:com.google.gson.JsonSerializer<BsonId>,com.google.gson.JsonDeserializer<BsonId>{
+            override fun serialize(
+                src: BsonId?,
+                typeOfSrc: Type?,
+                context: JsonSerializationContext?
+            ): JsonElement = src?.let { JsonPrimitive(it.hex()) }?:JsonNull.INSTANCE
+
+            override fun deserialize(
+                json: JsonElement,
+                typeOfT: Type?,
+                context: JsonDeserializationContext?
+            ): BsonId?=when{
+                json is JsonNull->null
+                json is JsonPrimitive &&
+                        json.isString&&
+                        BsonId.validate(json.asString)
+                ->BsonId(json.asString)
+                else->throw  IllegalArgumentException("Invalid ShortBsonId")
+            }
+        }
     }
 }
+@JsonAdapter(ShortBsonId.Companion.ShortBsonIdJsonAdpter::class)
+@JsonSerialize(using = ShortBsonId.Companion.ShortBsonIdJsonSerializer::class)
+@JsonDeserialize(using = ShortBsonId.Companion.ShortBsonIdJsonDeserializer::class)
+class ShortBsonId @JsonCreator constructor(private val hexString: String) {
+    private val id: BsonId
+
+    init {
+        id = BsonId.fromShort(hexString)!!
+    }
+
+    constructor(bint: BigInteger) : this(shortIdFromBigInt(bint))
+
+    val timestamp: Int get() = id.timestamp
+    val machineIdentifier: Int get() = id.machineIdentifier
+    val processIdentifier: Short get() = id.processIdentifier
+    val counter: Int get() = id.counter
+    val date: Date get() = id.date
+    val localDateTime: LocalDateTime get() = id.localDateTime
+    val instant: Instant get() = id.instant
+    val bsonId get() = id
+    val hex = hexString
+    val bigInt get() = shortIdToBigInt(hexString)
+    override fun toString(): String = hexString
+
+    companion object {
+        private fun shortIdFromBigInt(bint: BigInteger) =
+            bint.toString(10)
+                .let { if (it.length % 2 == 1) "0$it" else it }
+                .chunked(2)
+                .map { BsonId.code[it.toInt()] }
+                .joinToString("")
+
+        private fun shortIdToBigInt(id: String) =
+            id.map { BsonId.code.indexOf(it) }.joinToString("") { "%02d".format(it) }.toBigIntegerOrNull()
+
+        fun validate(id: String?) = BsonId.isVaildShortId(id)
+        fun get() = BsonId.getShort()
+        fun getHex() = BsonId.getShort().hex
+        class ShortBsonIdJsonSerializer : JsonSerializer<ShortBsonId>() {
+            override fun serialize(value: ShortBsonId?, gen: JsonGenerator?, serializers: SerializerProvider?) {
+                gen?.writeRawValue(value?.let {
+                    "\"${value.hex}\""
+                }
+                    ?: "null")
+            }
+        }
+
+        class ShortBsonIdJsonDeserializer : JsonDeserializer<ShortBsonId>() {
+            override fun deserialize(p: JsonParser?, ctxt: DeserializationContext?): ShortBsonId? = when {
+                p == null || p.text.isNullOrEmpty() || p.text == "null" || !validate(
+                    p.text.replace(
+                        "\"",
+                        ""
+                    )
+                ) -> null
+                else -> ShortBsonId(p.text.replace("\"", ""))
+            }
+
+        }
+        class ShortBsonIdJsonAdpter:com.google.gson.JsonSerializer<ShortBsonId>,com.google.gson.JsonDeserializer<ShortBsonId>{
+            override fun serialize(
+                src: ShortBsonId?,
+                typeOfSrc: Type?,
+                context: JsonSerializationContext?
+            ): JsonElement = src?.let { JsonPrimitive(it.hex) }?:JsonNull.INSTANCE
+
+            override fun deserialize(
+                json: JsonElement,
+                typeOfT: Type?,
+                context: JsonDeserializationContext?
+            ): ShortBsonId?=when{
+                json is JsonNull->null
+                json is JsonPrimitive &&
+                        json.isString&&
+                        validate(json.asString)
+                    ->ShortBsonId(json.asString)
+                else->throw  IllegalArgumentException("Invalid ShortBsonId")
+            }
+        }
+    }
+}
+
+
