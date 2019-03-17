@@ -334,7 +334,7 @@ class BsonId : Comparable<BsonId>, Serializable {
                 throw IllegalArgumentException()
             }
 
-            return hexString.length == 24 && hexString.find { (it !in '0'..'9') && it !in 'a'..'f' && it !in 'A'..'F' } == null
+            return hexString.length == 24 && hexString.find { (it !in code)} == null
 
 //            for (i in 0 until len) {
 //                val c = hexString[i]
