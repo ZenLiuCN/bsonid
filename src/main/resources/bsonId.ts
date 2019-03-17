@@ -27,7 +27,7 @@ namespace Bson {
             const pre = ar[i]
             const end = ar[i + 1]
             res += int2char(pre >> 2)
-            res += int2char((pre & 3 << 2 )+ (end >> 4))
+            res += int2char(((pre & 3 )<< 2 )+ (end >> 4))
             res += int2char(end & 15)
         }
         return res
@@ -223,8 +223,8 @@ namespace Bson {
         }
 
     }
-    export const validateLong = (hex: string) => BsonIdRegx.test(hex)
-    export const validateShort = (hex: string) => BsonShortIdRegx.test(hex)
+    export const validateLong = (hex: string|null) => hex?BsonIdRegx.test(hex):false
+    export const validateShort = (hex: string|null) => hex?BsonShortIdRegx.test(hex):false
     const state = new Cacher().load()
     export class BsonId {
         get timestamp(): number {
@@ -251,7 +251,7 @@ namespace Bson {
 
         constructor(hex: string | null = null) {
             if (validateLong(hex)) {
-                this.buf = hex
+                this.buf = hex!!
             } else {
                 this.buf = state.new()
             }
@@ -295,8 +295,8 @@ namespace Bson {
 
         constructor(hex: string | null = null) {
             if (validateShort(hex)) {
-                this.buf = hex
-                this.id = new BsonId(decompress(hex))
+                this.buf = hex!!
+                this.id = new BsonId(decompress(hex!!))
             } else {
                 this.id = new BsonId()
                 this.buf = this.id.toBsonShortString()
