@@ -1,7 +1,7 @@
 namespace Bson {
     const BsonIdRegx = /^[0-9a-fA-F]{24}$/
     const BsonShortIdRegx = /^[0-9a-zA-Z\-\_]{16}$/
-    const code = '012345679abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_'
+    const code = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_'
     const compress = function (hexBsonId: string) {
         if (hexBsonId.toLowerCase().match(BsonIdRegx) == null) {
             throw Error(`Invalid BsonId ${hexBsonId},should be 24 char for HEX`)
@@ -12,8 +12,8 @@ namespace Bson {
             const pre = ar[i]
             const mid = ar[i + 1]
             const end = ar[i + 2]
-            res += this.int2char(pre << 2 + mid >> 2)
-            res += this.int2char(mid & 3 << 4 + end)
+            res += int2char((pre << 2) + (mid >> 2))
+            res += int2char(((mid & 3 )<< 4) + end)
         }
         return res
     }
@@ -27,7 +27,7 @@ namespace Bson {
             const pre = ar[i]
             const end = ar[i + 1]
             res += int2char(pre >> 2)
-            res += int2char(pre & 3 << 2 + end >> 4)
+            res += int2char((pre & 3 << 2 )+ (end >> 4))
             res += int2char(end & 15)
         }
         return res
@@ -44,87 +44,18 @@ namespace Bson {
         }
         const idx = code.indexOf(i)
         if (idx < 0) {
-            throw Error(`invalid char ${i} for integer`)
+            throw Error(`invalid char code ${i} for integer`)
         }
         return idx
     }
-    class Buffer {
-        private buffer = new ArrayBuffer(12)
-        private _timestamp = new Uint8Array(this.buffer, 0, 4)
-        private _machine = new Uint8Array(this.buffer, 4, 3)
-        private _process = new Uint8Array(this.buffer, 7, 2)
-        private _counter = new Uint8Array(this.buffer, 9, 3)
-
-        //0123|456|78|9 10 11
-        set timestamp(time: number) {
-            this._timestamp[3] = time & 0xff
-            this._timestamp[2] = (time >> 8) & 0xff
-            this._timestamp[1] = (time >> 16) & 0xff
-            this._timestamp[0] = (time >> 24) & 0xff
-        }
-
-        set processIdentifier(process: number) {
-            this._process[1] = (process) & 0xff
-            this._process[0] = (process >> 8) & 0xff
-        }
-
-        set machineIdentifier(machine: number) {
-            this._machine[2] = machine & 0xff
-            this._machine[1] = (machine >> 8) & 0xff
-            this._machine[0] = (machine >> 16) & 0xff
-        }
-
-        set counter(count: number) {
-            this._counter[2] = count & 0xff
-            this._counter[1] = (count >> 8) & 0xff
-            this._counter[0] = (count >> 16) & 0xff
-        }
-
-        toHexString() {
-            return Array
-                .prototype
-                .map
-                .call(
-                    new Uint8Array(this.buffer),
-                    x => ('00' + x.toString(16)).slice(-2)).join('')
-        }
-
-        fromHexString(str: string) {
-            const buf = new Uint8Array(this.buffer)
-            str.match(/.{1,2}/g).forEach((v, idx) => {
-                buf[idx] = parseInt(v, 16)
-            })
-        }
-
-        get timestamp() {
-            return this._timestamp[3] + this._timestamp[2] << 8 + this._timestamp[1] << 16 + this._timestamp[0] << 24
-        }
-
-        get machineIdentifier() {
-            return this._machine[2] + this._machine[1] << 16 + this._machine[0] << 8
-        }
-
-        get processIdentifier() {
-            return this._process[1] + this._process[0] << 8
-
-        }
-
-        get counter() {
-            return this._counter[2] << 16 + this._counter[1] << 8 + this._counter[0]
-        }
-
-        new() {
-            this.processIdentifier = state._processIdentifier
-            this.machineIdentifier = state._machineIdentifier
-            this.counter = state.inc
-            this.timestamp = state.timestamp
-        }
+    const hex = (length: number, n: number) => {
+        const c = n.toString(16);
+        return (c.length === length) ? c : "00000000".substring(c.length, length) + c;
     }
-
     class Cacher {
-        _inc: number=-1
-        _machineIdentifier: number=-1
-        _processIdentifier: number=-1
+        _inc: number = -1
+        _machineIdentifier: number = -1
+        _processIdentifier: number = -1
         private _loaded: boolean = false
         private _useLocal: boolean = false
         private _useSession: boolean = false
@@ -155,6 +86,7 @@ namespace Bson {
 
         }
 
+
         save() {
             if (this._useLocal) {
                 this.saveLocalStore()
@@ -167,7 +99,7 @@ namespace Bson {
             }
         }
 
-        saveSessionStore() {
+        private saveSessionStore() {
             sessionStorage.setItem("bson", JSON.stringify(
                 {
                     _inc: this._inc,
@@ -177,7 +109,7 @@ namespace Bson {
             ))
         }
 
-        saveLocalStore() {
+        private saveLocalStore() {
             localStorage.setItem("bson", JSON.stringify(
                 {
                     _inc: this._inc,
@@ -187,7 +119,7 @@ namespace Bson {
             ))
         }
 
-        saveCookie() {
+        private saveCookie() {
             if (document.hasOwnProperty("cookie")) {
                 const tab = document.cookie.split(";").map(e => e.split("="))
                 const bson = tab.filter(e => e[0] == "bson")
@@ -211,9 +143,17 @@ namespace Bson {
             }
         }
 
-        fromSessionStore() {
+        private fromSessionStore() {
+            if (sessionStorage) {
+                this._useSession = true
+            }
             let cache = sessionStorage.getItem("bson")
-            if (cache == null) return
+            if (cache == null) {
+                this.genarate()
+                this.save()
+                this._loaded = true
+                return
+            }
             const load = JSON.parse(cache)
             this._machineIdentifier = load._machineIdentifier
             this._processIdentifier = load._processIdentifier
@@ -221,18 +161,29 @@ namespace Bson {
             this._loaded = true
         }
 
-        fromLocalStore() {
+        private fromLocalStore() {
+            if (localStorage) {
+                this._useLocal = true
+            }
             let cache = localStorage.getItem("bson")
-            if (cache == null) return
+            if (cache == null) {
+                this.genarate()
+                this.save()
+                this._loaded = true
+                return
+            }
             const load = JSON.parse(cache)
             this._machineIdentifier = load._machineIdentifier
             this._processIdentifier = load._processIdentifier
             this._inc = load._inc
             this._loaded = true
-            this._useLocal = true
         }
-
-        fromCookie() {
+        private genarate(){
+            this._machineIdentifier = Math.floor(Math.random() * (16777216))
+            this._processIdentifier = Math.floor(Math.random() * (65536))
+            this._inc = 0
+        }
+        private fromCookie() {
             if (document.hasOwnProperty("cookie")) {
                 this._useCookie = true
                 const tab = document.cookie.split(";").map(e => e.split("="))
@@ -244,61 +195,80 @@ namespace Bson {
                     this._inc = load._inc
                     this._loaded = true
                     return
+                }else{
+                    this.genarate()
+                    this.save()
+                    this._loaded = true
+                    return
                 }
             }
         }
 
-        get inc() {
+        private get inc() {
             this._inc = (this._inc + 1) % 0xffffff
             this.save()
             return this._inc
         }
 
-        get timestamp() {
-            return new Date().getTime() * 1000
+        private get timestamp() {
+            return Math.round(new Date().getTime() / 1000)
+        }
+
+        new() {
+            this.load()
+            return hex(8, this.timestamp)
+                + hex(6, this._machineIdentifier)
+                + hex(4, this._processIdentifier)
+                + hex(6, this.inc)
         }
 
     }
-
+    export const validateLong = (hex: string) => BsonIdRegx.test(hex)
+    export const validateShort = (hex: string) => BsonShortIdRegx.test(hex)
     const state = new Cacher().load()
-
-   export class BsonId {
+    export class BsonId {
         get timestamp(): number {
-            return this.buf.timestamp
+            return parseInt(this.buf.substr(0, 8), 16)
         }
 
         get machineIdentifier(): number {
-            return this.buf.machineIdentifier
+            return parseInt(this.buf.substr(9, 6), 16)
         }
 
         get processIdentifier(): number {
-            return this.buf.processIdentifier
+            return parseInt(this.buf.substr(15, 4), 16)
         }
 
         get counter(): number {
-            return this.buf.counter
+            return parseInt(this.buf.substr(19, 6), 16)
         }
 
         get date() {
             return new Date(this.timestamp * 1000)
         }
 
-        private buf: Buffer
+        private buf: string = ""
 
-        constructor(hex: string | null=null) {
-            this.buf = new Buffer()
-            if (hex && hex.length == 24 && hex.match(BsonIdRegx)) {
-                this.buf.fromHexString(hex)
+        constructor(hex: string | null = null) {
+            if (validateLong(hex)) {
+                this.buf = hex
             } else {
-                this.buf.new()
+                this.buf = state.new()
             }
-
         }
-        toString(){
-            return this.buf.toHexString()
+
+        toString() {
+            return this.buf
+        }
+
+        toBsonShortId() {
+            return new BsonShortId(this.toBsonShortString())
+        }
+
+        toBsonShortString() {
+            return compress(this.buf)
         }
     }
-
     export class BsonShortId {
         get timestamp(): number {
             return this.id.timestamp
@@ -321,24 +291,38 @@ namespace Bson {
         }
 
         private id: BsonId
+        private buf: string
 
-        constructor(hex: string | null=null) {
-            if (hex && hex.length == 16 && hex.match(BsonShortIdRegx)) {
+        constructor(hex: string | null = null) {
+            if (validateShort(hex)) {
+                this.buf = hex
                 this.id = new BsonId(decompress(hex))
             } else {
                 this.id = new BsonId()
+                this.buf = this.id.toBsonShortString()
             }
 
         }
-        toString(){
+
+        toString() {
+            return this.id.toString()
+        }
+
+        toBsonId() {
+            return this.id
+        }
+
+        toBsonString() {
             return this.id.toString()
         }
     }
-
-
-
     export function fromHex(hex: string | null) {
-        return new BsonId(hex)
+        switch (true) {
+            case hex===null: return new BsonId().toBsonShortId()
+            case validateLong(hex): return new BsonId(hex)
+            case validateShort(hex): return new BsonId(hex)
+            default: throw Error(`Invalid BsonId ${hex} `)
+        }
     }
 }
 const BsonHelper = {
@@ -347,8 +331,12 @@ const BsonHelper = {
     },
     get() {
         return Bson.fromHex(null)
-    }
+    },
+    getFull(){
+        return Bson.fromHex(null)['toBsonId']()
+    },
+    validateShort:Bson.validateShort,
+    validate:Bson.validateLong
 }
 export default BsonHelper
-export const BsonId=Bson.BsonId
-export const BsonShortId=Bson.BsonShortId
+
