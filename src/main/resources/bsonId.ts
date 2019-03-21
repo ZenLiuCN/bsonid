@@ -7,11 +7,14 @@ namespace Bson {
             throw Error(`Invalid BsonId ${hexBsonId},should be 24 char for HEX`)
         }
         let res = ""
+        let pre
+        let mid
+        let end
         const ar = hexBsonId.split("").map(c => char2int(c))
         for (let i = 0; i < ar.length; i += 3) {
-            const pre = ar[i]
-            const mid = ar[i + 1]
-            const end = ar[i + 2]
+             pre = ar[i]
+             mid = ar[i + 1]
+             end = ar[i + 2]
             res += int2char((pre << 2) + (mid >> 2))
             res += int2char(((mid & 3 )<< 4) + end)
         }
@@ -320,7 +323,7 @@ namespace Bson {
         switch (true) {
             case hex===null: return new BsonId().toBsonShortId()
             case validateLong(hex): return new BsonId(hex)
-            case validateShort(hex): return new BsonId(hex)
+            case validateShort(hex): return new BsonShortId(hex)
             default: throw Error(`Invalid BsonId ${hex} `)
         }
     }

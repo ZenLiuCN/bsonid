@@ -8,14 +8,18 @@ import org.junit.jupiter.api.Test
 class TestFuns{
     @Test
     fun toBigint(){
-
        (0..1000).forEach {
            val k=BsonId.getShort()
            val b=k.bigInt!!
-           val k2=BsonId.Companion.ShortBsonId(b)
+           val k2=BsonShortId(b)
           // print("${b.bitLength()}-${b.bitCount()},")
            assert(k.toString()==k2.toString())
        }
+    }
+    @Test
+    fun testJsToJvm(){
+        val k1=BsonId.fromShort("n9dfemLO5QyAanxt")
+        println("$k1")
     }
 
 }

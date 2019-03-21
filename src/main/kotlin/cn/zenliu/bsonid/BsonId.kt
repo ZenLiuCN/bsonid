@@ -280,7 +280,7 @@ class BsonId : Comparable<BsonId>, Serializable {
                 val mid = char2Int(str[i + 1])
                 val end = char2Int(str[i + 2])
                 res.append(int2Char((pre shl 2) + (mid shr 2)))
-                res.append(int2Char((mid and 3 shl 4) + end))
+                res.append(int2Char((mid and 3) shl 4) + end)
                 i += 3
             }
             return res.toString()
@@ -289,11 +289,6 @@ class BsonId : Comparable<BsonId>, Serializable {
         @JvmStatic
         private fun int2Char(i: Int): Char =
             when {
-                /*  i in 0..9 -> ('0'.toInt() + i).toChar()
-                  i in 10..35 -> ('a'.toInt() + i - 10).toChar()
-                  i in 36..61 -> ('A'.toInt() + i - 36).toChar()
-                  i == 62 -> '-'
-                  i == 63 -> '_'*/
                 i >= 0 && i <= 63 -> code[i]
                 else -> throw IllegalArgumentException()
             }
@@ -393,8 +388,7 @@ class BsonId : Comparable<BsonId>, Serializable {
         private val NEXT_COUNTER = AtomicInteger(SecureRandom().nextInt())
 
         @JvmStatic
-        private val HEX_CHARS =
-            charArrayOf('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f')
+        private val HEX_CHARS ="0123456789abcdef"
 
         init {
             try {
