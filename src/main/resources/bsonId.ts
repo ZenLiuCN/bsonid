@@ -319,9 +319,10 @@ namespace Bson {
             return this.id.toString()
         }
     }
-    export function fromHex(hex: string | null) {
+    export function fromHex(hex: string | null,full:boolean=false) {
         switch (true) {
-            case hex===null: return new BsonId().toBsonShortId()
+            case hex===null&&!full: return new BsonShortId(hex)
+             case hex===null&&full: return new BsonShortId(hex)
             case validateLong(hex): return new BsonId(hex)
             case validateShort(hex): return new BsonShortId(hex)
             default: throw Error(`Invalid BsonId ${hex} `)
@@ -336,7 +337,7 @@ const BsonHelper = {
         return Bson.fromHex(null)
     },
     getFull(){
-        return Bson.fromHex(null)['toBsonId']()
+        return Bson.fromHex(null,true)
     },
     validateShort:Bson.validateShort,
     validate:Bson.validateLong
