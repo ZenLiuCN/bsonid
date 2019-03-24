@@ -280,7 +280,7 @@ class BsonId : Comparable<BsonId>, Serializable {
                 val mid = char2Int(str[i + 1])
                 val end = char2Int(str[i + 2])
                 res.append(int2Char((pre shl 2) + (mid shr 2)))
-                res.append(int2Char((mid and 3) shl 4) + end)
+                res.append(int2Char(((mid and 3) shl 4) + end))
                 i += 3
             }
             return res.toString()
