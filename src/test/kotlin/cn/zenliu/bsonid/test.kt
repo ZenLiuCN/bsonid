@@ -22,4 +22,13 @@ class TestFuns{
         println("$k1")
     }
 
+    @Test
+    fun benchmarker() {
+        (0 until 10000).toList().parallelStream().map {
+            BsonShortId.getHex()
+        }.toList().toSet().let {
+            println("${it.size}")
+            assert(it.size == 10000)
+        }
+    }
 }
